@@ -4,7 +4,7 @@
 // Response sukses: { text }
 // Response kuota habis (429): { error }  -> otomatis muncul di bubble chat sebagai pesan error
 
-const { checkAndIncrement } = require("./lib/quota");
+const { checkAndIncrement } = require("./quota");
 
 const DAILY_LIMIT_CHAT = 15;
 
