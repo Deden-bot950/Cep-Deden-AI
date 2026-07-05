@@ -1,62 +1,75 @@
 // netlify/functions/generate-video.js
-// Starts a Veo 3.1 video generation job. Returns an operation name to poll.
-// Body: { prompt, referenceImage? (base64 data url), aspectRatio? }
+// Generate video pakai Veo 3.1 (Gemini) - KHUSUS user premium.
+// Body: { deviceId, prompt }
+// Balikan sukses: { operationName } -> cek status di video-status.js
+// Balikan ditolak (403): { error, premiumOnly: true }
+
+const { isPremiumUser } = require("./lib/quota");
 
 exports.handler = async function (event) {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: "Method Not Allowed" };
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return { statusCode: 500, body: JSON.stringify({ error: "GEMINI_API_KEY belum diset" }) };
-  }
-
   let payload;
   try {
     payload = JSON.parse(event.body);
   } catch (e) {
-    return { statusCode: 400, body: JSON.stringify({ error: "Invalid JSON body" }) };
+    return { statusCode: 400, body: JSON.stringify({ error: "Body bukan JSON valid" }) };
   }
 
-  const { prompt, referenceImage, aspectRatio } = payload;
+  const { deviceId, prompt } = payload;
+
+  if (!deviceId) {
+    return { statusCode: 400, body: JSON.stringify({ error: "deviceId wajib diisi" }) };
+  }
   if (!prompt) {
-    return { statusCode: 400, body: JSON.stringify({ error: "prompt wajib diisi" }) };
+    return { statusCode: 400, body: JSON.stringify({ error: "Field 'prompt' wajib diisi" }) };
   }
 
-  const instance = { prompt };
-  if (referenceImage) {
-    const match = referenceImage.match(/^data:(.+);base64,(.+)$/);
-    if (match) {
-      instance.image = { mimeType: match[1], bytesBase64Encoded: match[2] };
-    }
+  let premium;
+  try {
+    premium = await isPremiumUser(deviceId);
+  } catch (err) {
+    return { statusCode: 500, body: JSON.stringify({ error: `Quota error: ${err.message}` }) };
   }
 
-  const body = { instances: [instance] };
-  if (aspectRatio) {
-    body.parameters = { aspectRatio };
+  if (!premium) {
+    return {
+      statusCode: 403,
+      body: JSON.stringify({
+        error: "Fitur video cuma buat member premium. Yuk upgrade dulu!",
+        premiumOnly: true,
+      }),
+    };
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return { statusCode: 500, body: JSON.stringify({ error: "GEMINI_API_KEY belum di-set" }) };
   }
 
   try {
     const res = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/veo-3.1-generate-preview:predictLongRunning",
+      `https://generativelanguage.googleapis.com/v1beta/models/veo-3.1-generate-preview:predictLongRunning?key=${apiKey}`,
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": apiKey,
-        },
-        body: JSON.stringify(body),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          instances: [{ prompt }],
+        }),
       }
     );
+    const raw = await res.text();
+    if (!res.ok) throw new Error(`Veo error: ${raw}`);
+    const data = JSON.parse(raw);
 
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.error?.message || "Gemini video API error");
-    }
-
-    return { statusCode: 200, body: JSON.stringify({ operationName: data.name }) };
+    return {
+      statusCode: 200,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ operationName: data.name }),
+    };
   } catch (err) {
-    return { statusCode: 500, body: JSON.stringify({ error: err.message || "Gagal memulai generate video" }) };
+    return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
   }
 };
