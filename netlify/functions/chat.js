@@ -1,8 +1,8 @@
 // netlify/functions/chat.js
-// Chat pakai OpenAI atau Gemini, dengan limit 15 chat/hari untuk user gratis.
-// Body: { deviceId, messages: [{role, content}], system: "opsional", provider: "openai"|"gemini" }
-// Balikan sukses: { reply, remaining, isPremium }
-// Balikan kuota habis (429): { error, quotaExceeded: true }
+// Cocok persis dengan frontend Cep Deden AI.
+// Request:  { provider, model, systemPrompt, messages: [{role, content, images}], deviceId }
+// Response sukses: { text }
+// Response kuota habis (429): { error }  -> otomatis muncul di bubble chat sebagai pesan error
 
 const { checkAndIncrement } = require("./lib/quota");
 
@@ -10,7 +10,7 @@ const DAILY_LIMIT_CHAT = 15;
 
 exports.handler = async function (event) {
   if (event.httpMethod !== "POST") {
-    return { statusCode: 405, body: "Method Not Allowed" };
+    return { statusCode: 405, body: JSON.stringify({ error: "Method Not Allowed" }) };
   }
 
   let payload;
@@ -20,16 +20,12 @@ exports.handler = async function (event) {
     return { statusCode: 400, body: JSON.stringify({ error: "Body bukan JSON valid" }) };
   }
 
-  const { deviceId, messages, system, provider = "openai" } = payload;
+  const { provider = "openai", model, systemPrompt, messages, deviceId } = payload;
 
-  if (!deviceId) {
-    return { statusCode: 400, body: JSON.stringify({ error: "deviceId wajib diisi" }) };
-  }
   if (!messages || !Array.isArray(messages) || messages.length === 0) {
     return { statusCode: 400, body: JSON.stringify({ error: "Field 'messages' wajib diisi" }) };
   }
 
-  // Cek & potong kuota dulu sebelum panggil AI (biar nggak nombok biaya kalau ditolak)
   let quota;
   try {
     quota = await checkAndIncrement(deviceId, "chatCount", DAILY_LIMIT_CHAT);
@@ -41,46 +37,63 @@ exports.handler = async function (event) {
     return {
       statusCode: 429,
       body: JSON.stringify({
-        error: "Kuota chat gratis harian kamu udah habis. Upgrade ke premium biar unlimited!",
-        quotaExceeded: true,
+        error: "Kuota ngobrol gratis dinten ieu tos béak, Lur. Yuk upgrade ka premium heula! 🙏",
       }),
     };
   }
 
   try {
-    let reply;
+    let text;
 
     if (provider === "gemini") {
       const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) throw new Error("GEMINI_API_KEY belum di-set");
 
-      const contents = messages.map((m) => ({
-        role: m.role === "assistant" ? "model" : "user",
-        parts: [{ text: m.content }],
-      }));
+      const contents = messages.map((m) => {
+        const parts = [];
+        if (m.content) parts.push({ text: m.content });
+        if (m.images && m.images.length) {
+          m.images.forEach((dataUrl) => {
+            const match = dataUrl.match(/^data:(.+?);base64,(.+)$/);
+            if (match) parts.push({ inlineData: { mimeType: match[1], data: match[2] } });
+          });
+        }
+        return { role: m.role === "assistant" ? "model" : "user", parts };
+      });
 
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${model || "gemini-2.5-flash"}:generateContent?key=${apiKey}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             contents,
-            systemInstruction: system ? { parts: [{ text: system }] } : undefined,
+            systemInstruction: systemPrompt ? { parts: [{ text: systemPrompt }] } : undefined,
           }),
         }
       );
       const raw = await res.text();
       if (!res.ok) throw new Error(`Gemini error: ${raw}`);
       const data = JSON.parse(raw);
-      reply = data.candidates?.[0]?.content?.parts?.[0]?.text || "(kosong)";
+      text = data.candidates?.[0]?.content?.parts?.[0]?.text || "(kosong)";
     } else {
       const apiKey = process.env.OPENAI_API_KEY;
       if (!apiKey) throw new Error("OPENAI_API_KEY belum di-set");
 
       const finalMessages = [];
-      if (system) finalMessages.push({ role: "system", content: system });
-      finalMessages.push(...messages);
+      if (systemPrompt) finalMessages.push({ role: "system", content: systemPrompt });
+
+      messages.forEach((m) => {
+        if (m.images && m.images.length) {
+          const contentParts = [{ type: "text", text: m.content || "" }];
+          m.images.forEach((dataUrl) => {
+            contentParts.push({ type: "image_url", image_url: { url: dataUrl } });
+          });
+          finalMessages.push({ role: m.role, content: contentParts });
+        } else {
+          finalMessages.push({ role: m.role, content: m.content });
+        }
+      });
 
       const res = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
@@ -89,7 +102,7 @@ exports.handler = async function (event) {
           Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          model: "gpt-4o-mini",
+          model: model || "gpt-4o-mini",
           messages: finalMessages,
           temperature: 0.7,
         }),
@@ -97,13 +110,13 @@ exports.handler = async function (event) {
       const raw = await res.text();
       if (!res.ok) throw new Error(`OpenAI error: ${raw}`);
       const data = JSON.parse(raw);
-      reply = data.choices?.[0]?.message?.content || "(kosong)";
+      text = data.choices?.[0]?.message?.content || "(kosong)";
     }
 
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reply, remaining: quota.remaining, isPremium: quota.isPremium }),
+      body: JSON.stringify({ text }),
     };
   } catch (err) {
     return { statusCode: 500, body: JSON.stringify({ error: err.message }) };

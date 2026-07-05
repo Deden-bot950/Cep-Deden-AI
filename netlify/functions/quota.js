@@ -1,14 +1,10 @@
 // netlify/functions/lib/quota.js
 // Helper cek & update kuota harian per deviceId, disimpan di JSONBin.
-// Struktur data di JSONBin (satu objek besar):
-// {
-//   "device_abc123": { "date": "2026-07-05", "chatCount": 3, "imageCount": 1, "isPremium": false }
-// }
 
 const JSONBIN_URL = `https://api.jsonbin.io/v3/b/${process.env.JSONBIN_BIN_ID}`;
 
 function todayStr() {
-  return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  return new Date().toISOString().slice(0, 10);
 }
 
 async function readBin() {
@@ -32,14 +28,10 @@ async function writeBin(record) {
   if (!res.ok) throw new Error("Gagal simpan JSONBin: " + (await res.text()));
 }
 
-/**
- * Cek & increment kuota untuk deviceId pada field tertentu ("chatCount" / "imageCount").
- * limit: batas harian. Kalau isPremium true, limit diabaikan.
- * Return: { allowed: bool, remaining: number, isPremium: bool }
- */
 async function checkAndIncrement(deviceId, field, limit) {
   if (!deviceId) {
-    throw new Error("deviceId wajib dikirim dari frontend");
+    // Kalau frontend belum kirim deviceId (belum di-update), jangan block - anggap 1 device umum
+    deviceId = "anon_shared";
   }
 
   const record = await readBin();
@@ -69,6 +61,7 @@ async function checkAndIncrement(deviceId, field, limit) {
 }
 
 async function isPremiumUser(deviceId) {
+  if (!deviceId) return false;
   const record = await readBin();
   return !!record[deviceId]?.isPremium;
 }

@@ -1,14 +1,14 @@
 // netlify/functions/generate-video.js
-// Generate video pakai Veo 3.1 (Gemini) - KHUSUS user premium.
-// Body: { deviceId, prompt }
-// Balikan sukses: { operationName } -> cek status di video-status.js
-// Balikan ditolak (403): { error, premiumOnly: true }
+// Cocok persis dengan frontend Cep Deden AI. Pakai Veo 3.1 (Gemini) - KHUSUS premium.
+// Request:  { prompt, referenceImage (data URL, opsional untuk image-to-video), deviceId }
+// Response sukses: { operationName }
+// Response ditolak (403): { error }
 
 const { isPremiumUser } = require("./lib/quota");
 
 exports.handler = async function (event) {
   if (event.httpMethod !== "POST") {
-    return { statusCode: 405, body: "Method Not Allowed" };
+    return { statusCode: 405, body: JSON.stringify({ error: "Method Not Allowed" }) };
   }
 
   let payload;
@@ -18,11 +18,8 @@ exports.handler = async function (event) {
     return { statusCode: 400, body: JSON.stringify({ error: "Body bukan JSON valid" }) };
   }
 
-  const { deviceId, prompt } = payload;
+  const { prompt, referenceImage, deviceId } = payload;
 
-  if (!deviceId) {
-    return { statusCode: 400, body: JSON.stringify({ error: "deviceId wajib diisi" }) };
-  }
   if (!prompt) {
     return { statusCode: 400, body: JSON.stringify({ error: "Field 'prompt' wajib diisi" }) };
   }
@@ -38,8 +35,7 @@ exports.handler = async function (event) {
     return {
       statusCode: 403,
       body: JSON.stringify({
-        error: "Fitur video cuma buat member premium. Yuk upgrade dulu!",
-        premiumOnly: true,
+        error: "Fitur video khusus member premium, Lur. Yuk upgrade heula! 🎬",
       }),
     };
   }
@@ -50,14 +46,20 @@ exports.handler = async function (event) {
   }
 
   try {
+    const instance = { prompt };
+    if (referenceImage) {
+      const match = referenceImage.match(/^data:(.+?);base64,(.+)$/);
+      if (match) {
+        instance.image = { mimeType: match[1], bytesBase64Encoded: match[2] };
+      }
+    }
+
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/veo-3.1-generate-preview:predictLongRunning?key=${apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          instances: [{ prompt }],
-        }),
+        body: JSON.stringify({ instances: [instance] }),
       }
     );
     const raw = await res.text();

@@ -1,13 +1,13 @@
 // netlify/functions/video-status.js
-// Cek status render video Veo (dipanggil berkala/polling oleh frontend).
-// Query param: ?operationName=xxxx
-// Balikan: { done: bool, videoUrl: "https://..." (kalau sudah selesai) }
+// Cocok persis dengan frontend Cep Deden AI.
+// Request:  GET /.netlify/functions/video-status?op=xxxx
+// Response: { done, video (url, kalau udah selesai) }
 
 exports.handler = async function (event) {
-  const operationName = event.queryStringParameters?.operationName;
+  const op = event.queryStringParameters?.op;
 
-  if (!operationName) {
-    return { statusCode: 400, body: JSON.stringify({ error: "Query param 'operationName' wajib diisi" }) };
+  if (!op) {
+    return { statusCode: 400, body: JSON.stringify({ error: "Query param 'op' wajib diisi" }) };
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
@@ -16,19 +16,17 @@ exports.handler = async function (event) {
   }
 
   try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/${operationName}?key=${apiKey}`
-    );
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/${op}?key=${apiKey}`);
     const raw = await res.text();
     if (!res.ok) throw new Error(`Veo error: ${raw}`);
     const data = JSON.parse(raw);
 
-    const videoUrl = data.response?.generateVideoResponse?.generatedSamples?.[0]?.video?.uri || null;
+    const video = data.response?.generateVideoResponse?.generatedSamples?.[0]?.video?.uri || null;
 
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ done: !!data.done, videoUrl }),
+      body: JSON.stringify({ done: !!data.done, video }),
     };
   } catch (err) {
     return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
