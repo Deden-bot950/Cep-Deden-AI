@@ -21,7 +21,9 @@ exports.handler = async function (event) {
     if (!res.ok) throw new Error(`Veo error: ${raw}`);
     const data = JSON.parse(raw);
 
-    const video = data.response?.generateVideoResponse?.generatedSamples?.[0]?.video?.uri || null;
+    const rawVideoUrl = data.response?.generateVideoResponse?.generatedSamples?.[0]?.video?.uri || null;
+    // URL video dari Google butuh API key nempel biar bisa diakses langsung dari browser
+    const video = rawVideoUrl ? `${rawVideoUrl}${rawVideoUrl.includes("?") ? "&" : "?"}key=${apiKey}` : null;
 
     return {
       statusCode: 200,
