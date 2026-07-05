@@ -173,6 +173,146 @@
 <input type="file" id="fileInput" accept="image/*">
 
 <script>
+  // ===== TARUH DI BAGIAN <script> DI index.html, PALING ATAS =====
+// Sistem kuota & monetisasi Cep Deden AI
+tampilkanPaywall
+// 1. Bikin/ambil deviceId unik, disimpan permanen di HP user
+function getDeviceId() {
+  let id = localStorage.getItem('cepdeden_device_id');
+  if (!id) {
+    id = 'device_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10);
+    localStorage.setItem('cepdeden_device_id', id);
+  }
+  return id;
+}
+const DEVICE_ID = getDeviceId();
+
+// 2. Fungsi kirim chat
+async function kirimChat(messages, systemPrompt, provider = 'openai') {
+  const res = await fetch('/.netlify/functions/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      deviceId: DEVICE_ID,
+      messages,
+      system: systemPrompt,
+      provider, // "openai" atau "gemini"
+    }),
+  });
+  const data = await res.json();
+
+  if (res.status === 429) {
+    tampilkanPaywall(data.error);
+    return null;
+  }
+  if (!res.ok) {
+    tampilkanError(data.error);
+    return null;
+  }
+
+  tampilkanSisaKuota(data.remaining, data.isPremium, 'chat');
+  return data.reply;
+}
+
+// 3. Fungsi generate/edit gambar
+async function kirimGambar(prompt, provider = 'openai', fileFoto = null) {
+  let imageBase64 = null;
+  let mimeType = null;
+
+  // Kalau ada foto yang di-upload (mode edit gambar)
+  if (fileFoto) {
+    mimeType = fileFoto.type;
+    imageBase64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(',')[1]); // buang prefix "data:image/...;base64,"
+      reader.onerror = reject;
+      reader.readAsDataURL(fileFoto);
+    });
+  }
+
+  const res = await fetch('/.netlify/functions/generate-image', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      deviceId: DEVICE_ID,
+      prompt,
+      provider,
+      imageBase64,
+      mimeType,
+    }),
+  });
+  const data = await res.json();
+
+  if (res.status === 429) {
+    tampilkanPaywall(data.error);
+    return null;
+  }
+  if (!res.ok) {
+    tampilkanError(data.error);
+    return null;
+  }
+
+  tampilkanSisaKuota(data.remaining, data.isPremium, 'gambar');
+  return data.imageUrl; // langsung bisa dipasang ke <img src="...">
+}
+
+// 4. Fungsi generate video (submit + polling), KHUSUS PREMIUM
+async function kirimVideo(prompt) {
+  const res = await fetch('/.netlify/functions/generate-video', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ deviceId: DEVICE_ID, prompt }),
+  });
+  const data = await res.json();
+
+  if (res.status === 403) {
+    (data.error); // "Fitur video cuma buat member premium"
+    return null;
+  }
+  if (!res.ok) {
+    tampilkanError(data.error);
+    return null;
+  }
+
+  // Polling tiap 5 detik sampai video selesai dirender
+  return new Promise((resolve, reject) => {
+    const interval = setInterval(async () => {
+      const statusRes = await fetch(
+        `/.netlify/functions/video-status?operationName=${encodeURIComponent(data.operationName)}`
+      );
+      const statusData = await statusRes.json();
+
+      if (statusData.done && statusData.videoUrl) {
+        clearInterval(interval);
+        resolve(statusData.videoUrl);
+      }
+    }, 5000);
+
+    // Stop nyoba kalau lebih dari 5 menit (video biasanya render 1-3 menit)
+    setTimeout(() => {
+      clearInterval(interval);
+      reject(new Error('Video terlalu lama, coba lagi nanti'));
+    }, 5 * 60 * 1000);
+  });
+}
+
+// ===== FUNGSI TAMPILAN (SESUAIKAN DENGAN UI KAMU) =====
+
+function tampilkanPaywall(pesan) {
+  // Ganti ini dengan modal/popup upgrade premium versi kamu
+  alert('🔒 ' + pesan + '\n\nMau upgrade? Transfer ke [nomor rekening/QRIS kamu], lalu kirim bukti ke WhatsApp [nomor kamu].');
+}
+
+function tampilkanError(pesan) {
+  alert('⚠️ Punten, aya kasalahan: ' + pesan);
+}
+
+function tampilkanSisaKuota(remaining, isPremium, jenis) {
+  if (isPremium) return; // user premium ga perlu liat sisa kuota
+  console.log(`Sisa kuota ${jenis} hari ini: ${remaining}`);
+  // Opsional: tampilkan di UI, misal badge kecil "Sisa 12x chat hari ini"
+}
+
 let conversations = JSON.parse(localStorage.getItem('cepdeden_convs') || '[]');
 let currentConvId = null;
 let currentMode = 'chat';
