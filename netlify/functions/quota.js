@@ -1,104 +1,75 @@
 // netlify/functions/quota.js
-// Helper cek & update kuota harian per deviceId, disimpan di JSONBin.
+// Checks and increments daily usage quota per logged-in user (by email).
+// Reuses the same JSONBin "users" bin as auth.js, adding a `usage` field per user.
+//
+// Limits: chat = 25 pesen/poé, video = 2 kali/poé
+//
+// Required environment variables (same as auth.js):
+//   JSONBIN_API_KEY
+//   JSONBIN_USERS_BIN_ID
 
-const JSONBIN_URL = `https://api.jsonbin.io/v3/b/${process.env.JSONBIN_BIN_ID}`;
+const LIMITS = { chat: 25, video: 2 };
 
-function todayStr() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-async function readBin() {
-  const res = await fetch(`${JSONBIN_URL}/latest`, {
-    headers: { "X-Master-Key": process.env.JSONBIN_API_KEY },
-  });
-  if (!res.ok) throw new Error("Gagal baca JSONBin: " + (await res.text()));
-  const json = await res.json();
-  return json.record || {};
-}
-
-async function writeBin(record) {
-  const res = await fetch(JSONBIN_URL, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Master-Key": process.env.JSONBIN_API_KEY,
-    },
-    body: JSON.stringify(record),
-  });
-  if (!res.ok) throw new Error("Gagal simpan JSONBin: " + (await res.text()));
-}
-
-async function checkAndIncrement(deviceId, field, limit) {
-  if (!deviceId) {
-    // Kalau frontend belum kirim deviceId (belum di-update), jangan block - anggap 1 device umum
-    deviceId = "anon_shared";
+exports.handler = async function (event) {
+  if (event.httpMethod !== 'POST') {
+    return { statusCode: 405, body: 'Method Not Allowed' };
   }
 
-  const record = await readBin();
-  const today = todayStr();
+  const JSONBIN_API_KEY = process.env.JSONBIN_API_KEY;
+  const JSONBIN_USERS_BIN_ID = process.env.JSONBIN_USERS_BIN_ID;
 
-  let entry = record[deviceId];
-  if (!entry || entry.date !== today) {
-    entry = { date: today, chatCount: 0, imageCount: 0, isPremium: entry?.isPremium || false };
+  if (!JSONBIN_API_KEY || !JSONBIN_USERS_BIN_ID) {
+    return { statusCode: 500, body: JSON.stringify({ error: 'JSONBIN_API_KEY atawa JSONBIN_USERS_BIN_ID can diatur' }) };
   }
 
-  if (!entry.isPremium && entry[field] >= limit) {
-    return { allowed: false, remaining: 0, isPremium: false };
+  let payload;
+  try {
+    payload = JSON.parse(event.body);
+  } catch (e) {
+    return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
   }
 
-  if (!entry.isPremium) {
-    entry[field] = (entry[field] || 0) + 1;
+  const { email, type } = payload;
+  if (!email || !LIMITS[type]) {
+    return { statusCode: 400, body: JSON.stringify({ error: "email jeung type ('chat' atawa 'video') wajib dieusian" }) };
   }
 
-  record[deviceId] = entry;
-  await writeBin(record);
+  try {
+    const res = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_USERS_BIN_ID}/latest`, {
+      headers: { 'X-Master-Key': JSONBIN_API_KEY },
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error('Gagal muka database pamaké');
 
-  return {
-    allowed: true,
-    remaining: entry.isPremium ? -1 : Math.max(0, limit - entry[field]),
-    isPremium: entry.isPremium,
-  };
-}
+    const users = (data.record && data.record.users) || [];
+    const emailNorm = email.trim().toLowerCase();
+    const user = users.find((u) => u.email === emailNorm);
+    if (!user) {
+      return { statusCode: 400, body: JSON.stringify({ error: 'Akun teu kapanggih' }) };
+    }
 
-async function isPremiumUser(deviceId) {
-  if (!deviceId) return false;
-  const record = await readBin();
-  return !!record[deviceId]?.isPremium;
-}
+    const today = new Date().toISOString().slice(0, 10);
+    if (!user.usage || user.usage.date !== today) {
+      user.usage = { date: today, chat: 0, video: 0 };
+    }
 
-const DAILY_LIMIT_CHAT = 15;
-const DAILY_LIMIT_IMAGE = 3;
+    const limit = LIMITS[type];
+    const used = user.usage[type] || 0;
 
-async function getStatus(deviceId) {
-  if (!deviceId) return { isPremium: false, chatRemaining: DAILY_LIMIT_CHAT, imageRemaining: DAILY_LIMIT_IMAGE };
+    if (used >= limit) {
+      return { statusCode: 200, body: JSON.stringify({ allowed: false, remaining: 0, limit }) };
+    }
 
-  const record = await readBin();
-  const today = todayStr();
-  const entry = record[deviceId];
+    user.usage[type] = used + 1;
 
-  if (!entry || entry.date !== today) {
-    return {
-      isPremium: entry?.isPremium || false,
-      chatRemaining: DAILY_LIMIT_CHAT,
-      imageRemaining: DAILY_LIMIT_IMAGE,
-    };
+    await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_USERS_BIN_ID}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'X-Master-Key': JSONBIN_API_KEY },
+      body: JSON.stringify({ users }),
+    });
+
+    return { statusCode: 200, body: JSON.stringify({ allowed: true, remaining: limit - user.usage[type], limit }) };
+  } catch (err) {
+    return { statusCode: 500, body: JSON.stringify({ error: err.message || 'Aya kasalahan di server' }) };
   }
-
-  return {
-    isPremium: !!entry.isPremium,
-    chatRemaining: entry.isPremium ? -1 : Math.max(0, DAILY_LIMIT_CHAT - (entry.chatCount || 0)),
-    imageRemaining: entry.isPremium ? -1 : Math.max(0, DAILY_LIMIT_IMAGE - (entry.imageCount || 0)),
-  };
-}
-
-async function setPremium(deviceId) {
-  const record = await readBin();
-  const today = todayStr();
-  let entry = record[deviceId];
-  if (!entry) entry = { date: today, chatCount: 0, imageCount: 0 };
-  entry.isPremium = true;
-  record[deviceId] = entry;
-  await writeBin(record);
-}
-
-module.exports = { checkAndIncrement, isPremiumUser, getStatus, setPremium };
+};
