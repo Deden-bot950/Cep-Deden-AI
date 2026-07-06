@@ -118,37 +118,47 @@
   #sendBtn:disabled{opacity:.4;}
   #fileInput{display:none;}
   #syncBadge{font-size:10px; color:var(--text-dim); text-align:center; padding-top:6px;}
-  #statusBadge{
-    font-size:11px; padding:4px 10px; border-radius:12px; cursor:pointer; white-space:nowrap;
-    background:var(--bg3); color:var(--text-dim); border:1px solid var(--line);
+
+  /* Auth screen */
+  #authScreen{
+    position:fixed; inset:0; background:var(--bg); z-index:100;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:24px; text-align:center;
   }
-  #statusBadge.premium{background:rgba(217,164,65,.15); border-color:var(--gold-dim); color:var(--gold);}
-  .downloadBtn{
-    display:inline-flex; align-items:center; gap:4px; margin-top:6px; padding:5px 10px;
-    background:var(--bg2); border:1px solid var(--line); border-radius:10px; color:var(--text);
-    font-size:12px; cursor:pointer; text-decoration:none;
+  #authScreen .logo{width:76px;height:76px;border-radius:50%;overflow:hidden;box-shadow:0 0 0 3px var(--gold-dim);margin-bottom:14px;}
+  #authScreen .logo img{width:100%;height:100%;object-fit:cover;object-position:center 30%;}
+  #authScreen h1{font-size:22px;margin:0 0 4px;}
+  #authScreen .tagline{color:var(--text-dim);font-size:13px;margin-bottom:24px;}
+  #authTabs{display:flex; background:var(--bg3); border-radius:14px; padding:4px; margin-bottom:18px; width:100%; max-width:320px;}
+  #authTabs button{flex:1; padding:9px; border:none; background:none; color:var(--text-dim); border-radius:10px; font-size:14px; cursor:pointer;}
+  #authTabs button.active{background:var(--gold); color:#20160a; font-weight:600;}
+  #authForm{width:100%; max-width:320px; display:flex; flex-direction:column; gap:10px;}
+  #authForm input{
+    background:var(--bg3); border:1px solid var(--line); color:var(--text);
+    border-radius:12px; padding:13px 14px; font-size:14.5px; outline:none;
   }
-  #upgradeModal{
-    position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:50; display:none;
-    align-items:center; justify-content:center; padding:20px;
+  #authForm input::placeholder{color:var(--text-dim);}
+  #authForm button[type="submit"]{
+    background:var(--gold); color:#20160a; border:none; border-radius:12px;
+    padding:13px; font-size:15px; font-weight:700; cursor:pointer; margin-top:4px;
   }
-  #upgradeModal.show{display:flex;}
-  #upgradeBox{
-    background:var(--bg2); border-radius:var(--radius); padding:20px; max-width:320px; width:100%;
-    border:1px solid var(--gold-dim);
+  #authForm button[type="submit"]:disabled{opacity:.5;}
+  #authError{color:var(--danger); font-size:13px; min-height:18px;}
+
+  /* Admin panel modal */
+  #adminOverlay{position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:90; display:none; align-items:center; justify-content:center; padding:20px;}
+  #adminOverlay.show{display:flex;}
+  #adminModal{background:var(--bg2); border-radius:16px; padding:20px; width:100%; max-width:360px; max-height:80vh; overflow-y:auto;}
+  #adminModal h3{margin:0 0 14px;}
+  #adminModal input{
+    width:100%; background:var(--bg3); border:1px solid var(--line); color:var(--text);
+    border-radius:10px; padding:11px 12px; font-size:14px; outline:none; margin-bottom:10px; box-sizing:border-box;
   }
-  #upgradeBox h3{margin:0 0 10px; color:var(--gold); font-size:17px;}
-  #upgradeBox p{margin:0 0 16px; font-size:13.5px; color:var(--text-dim); line-height:1.5;}
-  #upgradeBox input{
-    width:100%; padding:10px; border-radius:10px; border:1px solid var(--line); background:var(--bg3);
-    color:var(--text); font-size:14px; margin-bottom:10px; box-sizing:border-box;
-  }
-  #upgradeBox .btnRow{display:flex; gap:8px;}
-  #upgradeBox button{
-    flex:1; padding:10px; border-radius:10px; border:none; font-size:13.5px; cursor:pointer; font-weight:600;
-  }
-  #upgradeBox .btnCancel{background:var(--bg3); color:var(--text-dim);}
-  #upgradeBox .btnSubmit{background:var(--gold); color:#20160a;}
+  #adminModal button.go{width:100%; background:var(--gold); color:#20160a; border:none; border-radius:10px; padding:11px; font-weight:600; cursor:pointer;}
+  #adminModal .userRow{padding:10px 0; border-bottom:1px solid var(--line); font-size:13px;}
+  #adminModal .userRow .n{font-weight:600;}
+  #adminModal .userRow .e{color:var(--text-dim); font-size:12px;}
+  #adminModal .closeAdmin{float:right; background:none; border:none; color:var(--text-dim); font-size:20px; cursor:pointer;}
 </style>
 </head>
 <body>
@@ -170,13 +180,46 @@
     <option value="gemini:gemini-2.5-flash">Lemes</option>
     <option value="gemini:gemini-2.5-pro">Jero</option>
   </select>
-  <div id="statusBadge">⏳</div>
+</div>
+
+<div id="authScreen">
+  <div class="logo"><img id="authLogo" src="" alt="Cep Deden AI"></div>
+  <h1>Cep Deden AI</h1>
+  <div class="tagline">Daptar heula sateuacan ngobrol, Lur</div>
+  <div id="authTabs">
+    <button id="tabLogin" class="active">Asup</button>
+    <button id="tabRegister">Daptar</button>
+  </div>
+  <form id="authForm">
+    <input id="authName" type="text" placeholder="Ngaran" style="display:none;">
+    <input id="authEmail" type="email" placeholder="Email" required>
+    <input id="authPassword" type="password" placeholder="Kecap sandi" required>
+    <div id="authError"></div>
+    <button type="submit" id="authSubmit">Asup</button>
+  </form>
+</div>
+
+<div id="adminOverlay">
+  <div id="adminModal">
+    <button class="closeAdmin" id="closeAdminBtn">×</button>
+    <h3>Panel Admin</h3>
+    <div id="adminLoginPart">
+      <input id="adminPassInput" type="password" placeholder="Kecap sandi admin">
+      <button class="go" id="adminGoBtn">Tempo Daptar Pamaké</button>
+      <div id="adminError" style="color:var(--danger);font-size:12px;margin-top:8px;"></div>
+    </div>
+    <div id="adminListPart" style="display:none;"></div>
+  </div>
 </div>
 
 <div id="overlay"></div>
 <div id="sidebar">
   <div id="sidebarHead"><button id="newChatBtn">+ Obrolan Anyar</button></div>
   <div id="convList"></div>
+  <div style="padding:8px;">
+    <button id="openAdminBtn" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg3);color:var(--text-dim);font-size:13px;cursor:pointer;margin-bottom:6px;">⚙️ Panel Admin</button>
+    <button id="logoutBtn" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg3);color:var(--danger);font-size:13px;cursor:pointer;">Kaluar</button>
+  </div>
   <div id="sidebarFoot">Riwayat ngobrol sinkron otomatis.<br><span id="syncStatus">Acan nyambung</span></div>
 </div>
 
@@ -204,35 +247,12 @@
 </div>
 <input type="file" id="fileInput" accept="image/*">
 
-<div id="upgradeModal">
-  <div id="upgradeBox">
-    <h3>🔒 Upgrade ka Premium</h3>
-    <p id="upgradeMsg">Kuota gratis dinten ieu tos béak.</p>
-    <input type="text" id="codeInput" placeholder="Asupkeun kode premium...">
-    <div class="btnRow">
-      <button class="btnCancel" id="upgradeCancelBtn">Tutup</button>
-      <button class="btnSubmit" id="upgradeSubmitBtn">Kirim Kode</button>
-    </div>
-  </div>
-</div>
-
 <script>
 let conversations = JSON.parse(localStorage.getItem('cepdeden_convs') || '[]');
 let currentConvId = null;
 let currentMode = 'chat';
 let attachedImage = null;
 let jsonbinConfig = JSON.parse(localStorage.getItem('cepdeden_jsonbin') || 'null');
-
-// ID unik per HP, dipakai buat ngitung kuota gratis harian
-function getDeviceId(){
-  let id = localStorage.getItem('cepdeden_device_id');
-  if (!id) {
-    id = 'device_' + Date.now() + '_' + Math.random().toString(36).slice(2,10);
-    localStorage.setItem('cepdeden_device_id', id);
-  }
-  return id;
-}
-const DEVICE_ID = getDeviceId();
 
 const chatWrap = document.getElementById('chatWrap');
 const textInput = document.getElementById('textInput');
@@ -354,10 +374,7 @@ function renderMsgEl(m){
   let mediaHtml = '';
   if (m.image) mediaHtml += `<img class="attach" src="${m.image}">`;
   if (m.video) mediaHtml += `<video class="attach" src="${m.video}" controls></video>`;
-  let downloadHtml = '';
-  if (m.image) downloadHtml = `<a class="downloadBtn" href="${m.image}" download="cepdeden-gambar-${Date.now()}.png">⬇ Unduh Gambar</a>`;
-  if (m.video) downloadHtml = `<a class="downloadBtn" href="${m.video}" download="cepdeden-video-${Date.now()}.mp4" target="_blank">⬇ Unduh Video</a>`;
-  wrap.innerHTML = `<div class="bubble">${mediaHtml}${escapeHtml(m.content)}${downloadHtml}</div>
+  wrap.innerHTML = `<div class="bubble">${mediaHtml}${escapeHtml(m.content)}</div>
     <div class="meta">${m.role==='ai' ? '<button class="speakBtn">🔊</button>' : ''}<span>${m.brain || ''}</span></div>`;
   if (m.role === 'ai') {
     wrap.querySelector('.speakBtn').addEventListener('click', () => speak(m.content));
@@ -457,10 +474,6 @@ textInput.addEventListener('keydown', (e) => {
 });
 sendBtn.addEventListener('click', handleSend);
 
-class ApiError extends Error {
-  constructor(message, status){ super(message); this.status = status; }
-}
-
 async function handleSend(){
   const text = textInput.value.trim();
   if (!text && !attachedImage) return;
@@ -493,13 +506,9 @@ async function handleSend(){
     }
   } catch (err) {
     removeTypingIndicator();
-    if (err.status === 429 || err.status === 403) {
-      showUpgradeModal(err.message);
-    } else {
-      conv.messages.push({ role:'ai', content:'Punten, aya kasalahan: ' + err.message });
-      renderMessages();
-      saveConvs();
-    }
+    conv.messages.push({ role:'ai', content:'Punten, aya kasalahan: ' + err.message });
+    renderMessages();
+    saveConvs();
   }
   sendBtn.disabled = false;
 }
@@ -518,44 +527,41 @@ async function runChat(conv, text, image){
     body: JSON.stringify({
       provider, model,
       systemPrompt: "Anjeun nyaéta Cep Deden AI, asisten pribadi pikeun Kang Deden. Anjeun WAJIB ngajawab ngan ngagunakeun Basa Sunda wungkul (bisa lemes atawa loma nurutkeun kaayaan obrolan), sanajan patarosanana ditulis ku basa séjén — kudu tetep dijawab ku Basa Sunda. Sebut nu ngajak ngobrol ku sesebutan 'Lur'. Ulah pisan nyebutkeun ngaran parusahaan atawa modél AI naon waé (contona OpenAI, ChatGPT, Google, Gemini); cukup wawakil salaku Cep Deden AI wungkul.",
-      messages: history,
-      deviceId: DEVICE_ID
+      messages: history
     })
   });
   const data = await res.json();
   removeTypingIndicator();
-  if (!res.ok) throw new ApiError(data.error || 'Gagal meunang jawaban', res.status);
+  if (!res.ok) throw new Error(data.error || 'Gagal meunang jawaban');
 
   conv.messages.push({ role:'ai', content: data.text, brain: modelSelect.options[modelSelect.selectedIndex].text });
   renderMessages();
   saveConvs();
-  if (typeof data.remaining === 'number') updateStatusBadge(data.isPremium, data.remaining, null);
 }
 
 async function runImageGen(conv, text, image){
   const res = await fetch('/.netlify/functions/generate-image', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ prompt:text, referenceImage:image, deviceId: DEVICE_ID })
+    body: JSON.stringify({ prompt:text, referenceImage:image })
   });
   const data = await res.json();
   removeTypingIndicator();
-  if (!res.ok) throw new ApiError(data.error || 'Gagal nyieun gambar', res.status);
+  if (!res.ok) throw new Error(data.error || 'Gagal nyieun gambar');
 
   conv.messages.push({ role:'ai', content:'Ieu gambarna, Lur 🎨', image:data.image, brain:'Tukang Gambar' });
   renderMessages();
   saveConvs();
-  if (typeof data.remaining === 'number') updateStatusBadge(data.isPremium, null, data.remaining);
 }
 
 async function runVideoGen(conv, text, image){
   const startRes = await fetch('/.netlify/functions/generate-video', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ prompt:text, referenceImage:image, deviceId: DEVICE_ID })
+    body: JSON.stringify({ prompt:text, referenceImage:image })
   });
   const startData = await startRes.json();
-  if (!startRes.ok) { removeTypingIndicator(); throw new ApiError(startData.error || 'Gagal mimitian nyieun video', startRes.status); }
+  if (!startRes.ok) { removeTypingIndicator(); throw new Error(startData.error || 'Gagal mimitian nyieun video'); }
 
   const opName = startData.operationName;
   let tries = 0;
@@ -563,7 +569,7 @@ async function runVideoGen(conv, text, image){
     await new Promise(r => setTimeout(r, 10000));
     const statusRes = await fetch('/.netlify/functions/video-status?op=' + encodeURIComponent(opName));
     const statusData = await statusRes.json();
-    if (!statusRes.ok) { removeTypingIndicator(); throw new ApiError(statusData.error || 'Gagal mariksa status video', statusRes.status); }
+    if (!statusRes.ok) { removeTypingIndicator(); throw new Error(statusData.error || 'Gagal mariksa status video'); }
     if (statusData.done) {
       removeTypingIndicator();
       conv.messages.push({ role:'ai', content:'Videona tos réngsé, Lur 🎬 (aya cap cai SynthID, standar ti sadaya video)', video:statusData.video, brain:'Tukang Video' });
@@ -577,85 +583,124 @@ async function runVideoGen(conv, text, image){
   throw new Error('Videona lila teuing dijieunna, cobian pariksa deui engké.');
 }
 
-// ===== Status akun & upgrade premium =====
-
-function updateStatusBadge(isPremium, chatRemaining, imageRemaining){
-  const badge = document.getElementById('statusBadge');
-  if (isPremium) {
-    badge.textContent = '⭐ Premium';
-    badge.classList.add('premium');
-  } else {
-    badge.classList.remove('premium');
-    if (chatRemaining !== null && chatRemaining !== undefined) badge.textContent = '💬 ' + chatRemaining + 'x';
-    else if (imageRemaining !== null && imageRemaining !== undefined) badge.textContent = '🎨 ' + imageRemaining + 'x';
-    else badge.textContent = 'Gratis';
-  }
-}
-
-async function refreshStatus(){
-  try {
-    const res = await fetch('/.netlify/functions/check-status?deviceId=' + encodeURIComponent(DEVICE_ID));
-    const data = await res.json();
-    if (data.isPremium) {
-      updateStatusBadge(true, null, null);
-    } else {
-      updateStatusBadge(false, data.chatRemaining, null);
-    }
-  } catch (e) {
-    document.getElementById('statusBadge').textContent = 'Gratis';
-  }
-}
-
-function showUpgradeModal(message){
-  document.getElementById('upgradeMsg').textContent = message || 'Kuota gratis dinten ieu tos béak.';
-  document.getElementById('codeInput').value = '';
-  document.getElementById('upgradeModal').classList.add('show');
-}
-function hideUpgradeModal(){
-  document.getElementById('upgradeModal').classList.remove('show');
-}
-
-document.getElementById('statusBadge').addEventListener('click', () => {
-  if (!document.getElementById('statusBadge').classList.contains('premium')) {
-    showUpgradeModal('Asupkeun kode premium di handap ieu, Lur.');
-  }
-});
-document.getElementById('upgradeCancelBtn').addEventListener('click', hideUpgradeModal);
-document.getElementById('upgradeModal').addEventListener('click', (e) => {
-  if (e.target.id === 'upgradeModal') hideUpgradeModal();
-});
-document.getElementById('upgradeSubmitBtn').addEventListener('click', async () => {
-  const code = document.getElementById('codeInput').value.trim();
-  if (!code) return;
-  const btn = document.getElementById('upgradeSubmitBtn');
-  btn.disabled = true; btn.textContent = 'Ngeceking...';
-  try {
-    const res = await fetch('/.netlify/functions/redeem-code', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ deviceId: DEVICE_ID, code })
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      alert(data.error || 'Kodena salah, Lur.');
-    } else {
-      alert('Wilujeng, Lur! Anjeun tos jadi member Premium 🎉');
-      hideUpgradeModal();
-      updateStatusBadge(true, null, null);
-    }
-  } catch (e) {
-    alert('Aya kasalahan, cobian deui.');
-  }
-  btn.disabled = false; btn.textContent = 'Kirim Kode';
-});
-
-(async function init(){
+async function startApp(){
   await ensureJsonbin();
   if (jsonbinConfig) await pullFromJsonbin();
   if (conversations.length === 0) newConversation();
   else { currentConvId = conversations[0].id; renderConvList(); renderMessages(); }
-  refreshStatus();
-})();
+}
+
+// ---------- Authentication ----------
+const authScreen = document.getElementById('authScreen');
+const authForm = document.getElementById('authForm');
+const authNameInput = document.getElementById('authName');
+const authEmailInput = document.getElementById('authEmail');
+const authPasswordInput = document.getElementById('authPassword');
+const authError = document.getElementById('authError');
+const authSubmit = document.getElementById('authSubmit');
+const tabLogin = document.getElementById('tabLogin');
+const tabRegister = document.getElementById('tabRegister');
+let authMode = 'login';
+
+document.getElementById('authLogo').src = document.querySelector('#brand .logo img').src;
+
+tabLogin.addEventListener('click', () => setAuthMode('login'));
+tabRegister.addEventListener('click', () => setAuthMode('register'));
+
+function setAuthMode(mode){
+  authMode = mode;
+  tabLogin.classList.toggle('active', mode === 'login');
+  tabRegister.classList.toggle('active', mode === 'register');
+  authNameInput.style.display = mode === 'register' ? 'block' : 'none';
+  authSubmit.textContent = mode === 'register' ? 'Daptar' : 'Asup';
+  authError.textContent = '';
+}
+
+authForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  authError.textContent = '';
+  authSubmit.disabled = true;
+  authSubmit.textContent = 'Nunggu...';
+
+  const body = {
+    action: authMode,
+    email: authEmailInput.value.trim(),
+    password: authPasswordInput.value,
+  };
+  if (authMode === 'register') body.name = authNameInput.value.trim();
+
+  try {
+    const res = await fetch('/.netlify/functions/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Aya kasalahan, cobian deui');
+
+    localStorage.setItem('cepdeden_session', JSON.stringify(data.user));
+    authScreen.style.display = 'none';
+    startApp();
+  } catch (err) {
+    authError.textContent = err.message;
+    authSubmit.disabled = false;
+    authSubmit.textContent = authMode === 'register' ? 'Daptar' : 'Asup';
+  }
+});
+
+function checkSession(){
+  const session = JSON.parse(localStorage.getItem('cepdeden_session') || 'null');
+  if (session && session.email) {
+    authScreen.style.display = 'none';
+    startApp();
+  } else {
+    setAuthMode('login');
+    authScreen.style.display = 'flex';
+  }
+}
+
+document.getElementById('logoutBtn').addEventListener('click', () => {
+  if (!confirm('Yakin rék kaluar, Lur?')) return;
+  localStorage.removeItem('cepdeden_session');
+  location.reload();
+});
+
+// ---------- Admin panel ----------
+const adminOverlay = document.getElementById('adminOverlay');
+document.getElementById('openAdminBtn').addEventListener('click', () => {
+  adminOverlay.classList.add('show');
+  document.getElementById('adminLoginPart').style.display = 'block';
+  document.getElementById('adminListPart').style.display = 'none';
+  document.getElementById('adminError').textContent = '';
+  document.getElementById('adminPassInput').value = '';
+});
+document.getElementById('closeAdminBtn').addEventListener('click', () => {
+  adminOverlay.classList.remove('show');
+});
+document.getElementById('adminGoBtn').addEventListener('click', async () => {
+  const pass = document.getElementById('adminPassInput').value;
+  const errEl = document.getElementById('adminError');
+  errEl.textContent = '';
+  try {
+    const res = await fetch('/.netlify/functions/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'list', adminPassword: pass }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Gagal muka daptar');
+
+    const listPart = document.getElementById('adminListPart');
+    listPart.innerHTML = `<div style="margin-bottom:8px;color:var(--text-dim);font-size:12px;">${data.users.length} pamaké kadaptar</div>` +
+      data.users.map(u => `<div class="userRow"><div class="n">${escapeHtml(u.name)}</div><div class="e">${escapeHtml(u.email)} · ${new Date(u.createdAt).toLocaleDateString('id-ID')}</div></div>`).join('');
+    document.getElementById('adminLoginPart').style.display = 'none';
+    listPart.style.display = 'block';
+  } catch (err) {
+    errEl.textContent = err.message;
+  }
+});
+
+checkSession();
 </script>
 </body>
 </html>
