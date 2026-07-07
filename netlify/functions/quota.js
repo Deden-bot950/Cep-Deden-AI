@@ -74,6 +74,36 @@ async function checkAndIncrement(email, type) {
   return { allowed: true, remaining: limit - user.usage[type], limit, isPremium: !!user.isPremium };
 }
 
+/**
+ * Versi gancang: cek kuota jeung TEU NUNGGUAN prosés nyimpen (fire-and-forget).
+ * Dipaké keur operasi anu sensitif waktos (kawas generate video) sangkan teu
+ * ngalambatkeun panggero API utama. Kuota bisa saeutik telat kacatet, tapi
+ * fungsi utama bisa langsung lumangsung.
+ */
+async function checkAndIncrementFast(email, type) {
+  if (!email) return { allowed: true, remaining: 999, limit: 999, isPremium: false };
+
+  const users = await fetchUsers();
+  const emailNorm = email.trim().toLowerCase();
+  const user = users.find((u) => u.email === emailNorm);
+  if (!user) return { allowed: true, remaining: 999, limit: 999, isPremium: false };
+
+  ensureFreshUsage(user);
+
+  const limits = user.isPremium ? PREMIUM_LIMITS : LIMITS;
+  const limit = limits[type];
+  const used = user.usage[type] || 0;
+
+  if (used >= limit) {
+    return { allowed: false, remaining: 0, limit, isPremium: !!user.isPremium };
+  }
+
+  user.usage[type] = used + 1;
+  saveUsers(users).catch(() => {}); // fire-and-forget, teu ditungguan
+
+  return { allowed: true, remaining: limit - user.usage[type], limit, isPremium: !!user.isPremium };
+}
+
 async function getStatus(email) {
   if (!email) return { isPremium: false, chatRemaining: LIMITS.chat, imageRemaining: LIMITS.image, videoRemaining: LIMITS.video };
 
@@ -108,4 +138,4 @@ async function redeemCode(email, code) {
   return { success: true };
 }
 
-module.exports = { checkAndIncrement, getStatus, redeemCode, LIMITS, PREMIUM_LIMITS };
+module.exports = { checkAndIncrement, checkAndIncrementFast, getStatus, redeemCode, LIMITS, PREMIUM_LIMITS };

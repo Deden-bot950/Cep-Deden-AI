@@ -2,7 +2,7 @@
 // Starts a Veo 3.1 video generation job. Returns an operation name to poll.
 // Body: { prompt, referenceImage?, aspectRatio?, email }
 
-const { checkAndIncrement } = require('./quota');
+const { checkAndIncrementFast } = require('./quota');
 
 exports.handler = async function (event) {
   if (event.httpMethod !== "POST") {
@@ -27,7 +27,7 @@ exports.handler = async function (event) {
   }
 
   try {
-    const quota = await checkAndIncrement(email, 'video');
+    const quota = await checkAndIncrementFast(email, 'video');
     if (!quota.allowed) {
       return {
         statusCode: 429,
@@ -51,6 +51,9 @@ exports.handler = async function (event) {
     body.parameters = { aspectRatio };
   }
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8800);
+
   try {
     const res = await fetch(
       "https://generativelanguage.googleapis.com/v1beta/models/veo-3.1-generate-preview:predictLongRunning",
@@ -61,16 +64,28 @@ exports.handler = async function (event) {
           "x-goog-api-key": apiKey,
         },
         body: JSON.stringify(body),
+        signal: controller.signal,
       }
     );
+    clearTimeout(timeoutId);
 
-    const data = await res.json();
+    let data;
+    try {
+      data = await res.json();
+    } catch (parseErr) {
+      throw new Error("Google ngabales format anu teu jelas, cobian deui sakedap deui");
+    }
+
     if (!res.ok) {
       throw new Error(data.error?.message || "Gemini video API error");
     }
 
     return { statusCode: 200, body: JSON.stringify({ operationName: data.name }) };
   } catch (err) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      return { statusCode: 504, body: JSON.stringify({ error: "Server Google lila teuing ngabales, cobian deui sakedap deui nya, Lur" }) };
+    }
     return { statusCode: 500, body: JSON.stringify({ error: err.message || "Gagal memulai generate video" }) };
   }
 };
